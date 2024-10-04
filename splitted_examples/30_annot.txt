@@ -1,0 +1,1 @@
+parser.parse_args([] if "__file__" not in globals() else None)

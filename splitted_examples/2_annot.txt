@@ -1,0 +1,1 @@
+range (len(LETTERS_CLASSES)):

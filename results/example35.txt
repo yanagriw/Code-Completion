@@ -1,0 +1,1 @@
+100 for val in adjusted_lambdas]

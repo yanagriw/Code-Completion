@@ -1,0 +1,1 @@
+t_neighbors.KNeighborsClassifier(n_neighbors=10)

@@ -1,0 +1,244 @@
+<fim_prefix>from collections import Counter
+import random
+import math
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+def compute_cross_entropy(test_data, p0, p1, p2, p3, lambdas):
+    cross_entropy = 0
+    N = len(test_data)
+    vocab_size = len(p0)  # Assuming p0 contains all vocabulary
+
+    for i in range(2, N):  # Starting from 2 because of trigrams
+        word = test_data[i]
+        bigram = (test_data[i-1], word)
+        trigram = (test_data[i-2], test_data[i-1], word)
+
+        # Adjusted probability calculations
+        p0_prob = p0.get(word, 0)
+        p1_prob = p1.get(word, 0)
+        p2_prob = p2.get(bigram, 0) if p1.get(test_data[i-1], 0) > 0 else 1/vocab_size
+        p3_prob = p3.get(trigram, 0) if p2.get((test_data[i-2], test_data[i-1]), 0) > 0 else 1/vocab_size
+
+
+        # Calculate the probability using the smoothed model
+        prob = (lambdas[0] * p0_prob +
+                lambdas[1] * p1_prob +
+                lambdas[2] * p2_prob +
+                lambdas[3] * p3_prob)
+
+        if prob > 0:
+            cross_entropy -= math.log(prob, 2)
+
+    return cross_entropy / (N - 2) if N > 2 else 0
+
+
+def adjust_lambdas(original_lambdas, adjustment):
+    if 'increase_lambda3_by' in adjustment:
+        pct_increase = adjustment['increase_lambda3_by']
+        adjustment = create_adjustment_increase_lambda3(original_lambdas, pct_increase)
+    elif 'decrease_lambda3_by' in adjustment:
+        pct_decrease<fim_suffix>
+        adjustment = create_adjustment_decrease_lambda3(original_lambdas, pct_decrease)
+
+    adjusted_lambdas = [max(0, original_lambdas[i] + adjustment[i]) for i in range(len(original_lambdas))]
+
+    total = sum(adjusted_lambdas)
+    if total > 0:
+        adjusted_lambdas = [val / total for val in adjusted_lambdas]
+    
+    return adjusted_lambdas
+
+
+def create_adjustment_increase_lambda3(original_lambdas, pct_increase):
+    lambda3_idx = 3  # Assuming λ3 is at index 3
+    adjustment = [0] * len(original_lambdas)
+    lambda3_increase = (1 - original_lambdas[lambda3_idx]) * (pct_increase / 100)
+    total_decrease = lambda3_increase
+    proportional_decrease = total_decrease / (1 - original_lambdas[lambda3_idx])
+
+    for i in range(len(original_lambdas)):
+        if i != lambda3_idx:
+            adjustment[i] = -original_lambdas[i] * proportional_decrease
+
+    adjustment[lambda3_idx] = lambda3_increase
+    return adjustment
+
+
+def create_adjustment_decrease_lambda3(original_lambdas, pct_decrease):
+    lambda3_idx = 3  # Assuming λ3 is at index 3
+    adjustment = [0] * len(original_lambdas)
+    lambda3_decrease = original_lambdas[lambda3_idx] * (pct_decrease / 100)
+    total_increase = lambda3_decrease
+    proportional_increase = total_increase / original_lambdas[lambda3_idx]
+
+    for i in range(len(original_lambdas)):
+        if i != lambda3_idx:
+            adjustment[i] = original_lambdas[i] * proportional_increase
+
+    adjustment[lambda3_idx] = -lambda3_decrease
+    return adjustment
+
+
+def ngrams(words, n):
+    # Generate n-grams from the list of words
+    return zip(*[words[i:] for i in range(n)])
+
+def compute_probabilities(training_data):
+
+    # Adding start (<s>) and end (</s>) tokens for bigrams and trigrams
+    words = ['<s>'] + training_data + ['</s>']
+    
+    # Unigram counts
+    unigram_counts = Counter(words)
+    total_words = sum(unigram_counts.values())
+    vocab_size = len(unigram_counts)
+    
+    # Bigram counts with start and end tokens
+    bigram_counts = Counter(ngrams(words, 2))
+
+    # Trigram counts with start and end tokens
+    trigram_counts = Counter(ngrams(words, 3))
+
+    # Uniform probability
+    p0 = {word: 1.0 / vocab_size for word in unigram_counts}
+
+    # Unigram probability
+    p1 = {word: count / total_words for word, count in unigram_counts.items()}
+
+    # Bigram probability
+    p2 = {bigram: count / unigram_counts[bigram[0]] for bigram, count in bigram_counts.items()}
+
+    # Trigram probability
+    p3 = {}
+    for trigram, count in trigram_counts.items():
+        bigram = trigram[:2]
+        p3[trigram] = count / bigram_counts[bigram]
+
+    return p0, p1, p2, p3, vocab_size
+
+def initialize_lambdas():
+    lambdas = [0.25 for _ in range(4)]
+    return lambdas
+
+def expectation_step(heldout_data, p0, p1, p2, p3, lambdas, vocab_size):
+    expected_counts = {'p0': 0, 'p1': 0, 'p2': 0, 'p3': 0}
+
+    for i in range(2, len(heldout_data)):  # Start from index 2 because of trigrams
+        word = heldout_data[i]
+        bigram = (heldout_data[i-1], word)
+        trigram = (heldout_data[i-2], heldout_data[i-1], word)
+
+        # Adjusted probability calculations
+        p1_prob = p1.get(word, 0) 
+        p2_prob = p2.get(bigram, 0) if p1.get(heldout_data[i-1], 0) > 0 else 1/vocab_size
+        p3_prob = p3.get(trigram, 0) if p2.get((heldout_data[i-2], heldout_data[i-1]), 0) > 0 else 1/vocab_size
+
+        p_lambda = (lambdas[3] * p3_prob 
+        + lambdas[2] * p2_prob 
+        + lambdas[1] * p1_prob
+        + lambdas[0] / vocab_size)
+
+        # Calculate expected counts for each n-gram level
+        expected_counts['p0'] += (lambdas[0] / vocab_size) / p_lambda
+        expected_counts['p1'] += lambdas[1] * p1_prob / p_lambda
+        expected_counts['p2'] += lambdas[2] * p2_prob / p_lambda
+        expected_counts['p3'] += lambdas[3] * p3_prob / p_lambda
+
+    return expected_counts
+
+def maximization_step(expected_counts):
+    total = sum(expected_counts.values())
+    
+    # Normalizing the expected counts to get new lambda values
+    lambdas = [expected_counts[key] / total for key in ['p0', 'p1', 'p2', 'p3']]
+    
+    return lambdas
+
+def em_algorithm(heldout_data, p0, p1, p2, p3, vocab_size, max_iterations=1000, tolerance=1e-16):
+    lambdas = initialize_lambdas()
+    
+    for i in range(max_iterations):
+        old_lambdas = lambdas.copy()
+        
+        expected_values = expectation_step(heldout_data, p0, p1, p2, p3, lambdas, vocab_size)
+        lambdas = maximization_step(expected_values)
+
+        # Check for convergence
+        if all(abs(old - new) < tolerance for old, new in zip(old_lambdas, lambdas)):
+            break
+
+    return lambdas
+
+def compute_coverage(training_data, test_data):
+    training_words = set(training_data)
+    test_words = set(test_data)
+
+    common_words = training_words.intersection(test_words)
+    coverage = len(common_words) / len(test_words) * 100 if test_words else 0
+
+    return coverage
+
+def process_data(filepath):
+    with open(filepath, 'r', encoding="iso-8859-2") as file:
+        text = file.read().split('\n')
+
+    # Tokenize each line into words and characters
+    tokens = [line for line in text]
+
+    test_data_size = 20000
+    heldout_data_size = 40000
+
+    # Splitting the data
+    test_data = tokens[-test_data_size:]  # Last 20,000 words
+    heldout_data = tokens[-(test_data_size + heldout_data_size):-test_data_size]  # 40,000 words before the Test Data
+    training_data = tokens[:-(test_data_size + heldout_data_size)]  # Remaining words
+
+    coverage = compute_coverage(training_data, test_data)
+
+    p0, p1, p2, p3, vocab_size = compute_probabilities(training_data)
+
+    lambdas = em_algorithm(heldout_data, p0, p1, p2, p3, vocab_size)
+    print("Parameters", lambdas)
+
+    # Store results
+    results = []
+
+    # Decrease λ3
+    for pct in range(90, 0, -10):  # 90, 80, 70, ..., 10
+        new_lambdas = adjust_lambdas(lambdas, {'decrease_lambda3_by': pct})
+        entropy = compute_cross_entropy(test_data, p0, p1, p2, p3, new_lambdas)
+        results.append((f'Dec λ3 by {pct}%', entropy))
+
+    # Compute original cross-entropy
+    original_entropy = compute_cross_entropy(test_data, p0, p1, p2, p3, lambdas)
+    results.append(('Original', original_entropy))
+
+    # Increase λ3
+    for pct in range(10, 100, 10):  # 10, 20, 30, ..., 90
+        new_lambdas = adjust_lambdas(lambdas, {'increase_lambda3_by': pct})
+        entropy = compute_cross_entropy(test_data, p0, p1, p2, p3, new_lambdas)
+        results.append((f'Inc λ3 by {pct}%', entropy))
+
+    additional_pct = [95, 99]
+    for pct in additional_pct:
+        new_lambdas = adjust_lambdas(lambdas, {'increase_lambda3_by': pct})
+        entropy = compute_cross_entropy(test_data, p0, p1, p2, p3, new_lambdas)
+        results.append((f'Inc λ3 by {pct}%', entropy))
+
+    # Convert to DataFrame for easy tabulation
+    df = pd.DataFrame(results, columns=['Parameter Setting', 'Cross Entropy'])
+    print(df)
+
+    return df, coverage
+
+def main():
+    print("RESULTS FOR CZECH TEXT")
+    df_cz, coverage_cz = process_data("TEXTCZ1.txt")
+    print("RESULTS FOR ENGLISH TEXT")
+    df_en, coverage_en = process_data("TEXTEN1.txt")
+
+
+if __name__ == "__main__":
+    main()<fim_middle>

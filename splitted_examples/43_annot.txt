@@ -1,0 +1,1 @@
+(N * (c_bigram / (c_left * c_right)), 2)

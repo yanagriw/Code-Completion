@@ -1,0 +1,134 @@
+<fim_prefix>#!/usr/bin/env python3
+import argparse
+import lzma
+import pickle
+import os
+import urllib.request
+import sys
+from typing import Optional
+import numpy as np
+import numpy.typing as npt
+import re
+import sklearn.naive_bayes
+import sklearn.metrics
+import sklearn.model_selection
+from sklearn.pipeline import Pipeline
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--predict", default=None, type=str, help="Path to the dataset to predict")
+parser.add_argument("--seed", default=42, type=int, help="Random seed")
+parser.add_argument("--model_path", default="isnt_it_ironic.model", type=str, help="Model path")
+
+
+class Dataset:
+    def __init__(self,
+                 name="isnt_it_ironic.train.txt",
+                 url="https://ufal.mff.cuni.cz/~straka/courses/npfl129/2223/datasets/"):
+        if not os.path.exists(name):
+            print("Downloading dataset {}...".format(name), file=sys.stderr)
+            licence_name = name.replace(".txt", ".LICENSE")
+            urllib.request.urlretrieve(url + licence_name, filename=licence_name)
+            urllib.request.urlretrieve(url + name, filename=name)
+
+        # Load the dataset and split it into `data` and `target`.
+        self.data = []
+        self.target = []
+
+        with open(name, "r", encoding="utf-8-sig") as dataset_file:
+            for line in dataset_file:
+                label, text = line.rstrip("\n").split("\t")
+                self.data.append(text)
+                self.target.append(int(label))
+        self.target = np.array(self.target, np.int32)
+
+class PreprocessData:
+    idfs = []
+    all_words = {}
+    training = True
+    
+    def fit(self, X, y = None):
+        return self
+
+    def transform(self, X, y = None):
+        docs_features = []
+        doc_words = []
+        for doc in X:
+            doc_words.append(self.fill_dict(doc))
+        
+        if self.training:
+            self.all_words = {k:v[0] for k,v in self.all_words.items() if v[1] != 1}
+
+        doc_count = len(doc_words)
+
+        for d in doc_words:
+            docs_features.append([d[word] / self.count_words(d) if word in d else 0 for word in self.all_words.keys()])
+        docs_features = np.array(docs_features)
+
+        if self.training:
+            self.idfs = np.array([np.log(doc_count / self.all_words[word] + 1) for word in self.all_words.keys()])
+        docs_features = docs_features * self.idfs
+
+        self.training = False
+
+        print(len(self.all_words))
+        return docs_features
+
+    def fill_dict(self, doc):
+        words = {}
+        pattern = re.compile(r'\w+')
+        matches = pattern.findall(doc)
+        for word in matches:
+            if word in words:
+                words[word] += 1
+            else:
+                words[word] = 1
+
+        if self.training:
+            for word in words.keys():
+                if word in self.all_words:
+                    self.all_words[word][0] += 1
+                    self.all_words[word][1] += words[word]
+                else:
+                    self.all_words[word] = [1, words[word]]
+
+        return words
+
+    def count_words(self, d):
+        n = 0
+        for freq in d.values():
+            n += freq
+        return n
+
+def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
+    if args.predict is None:
+        # We are training a model.
+        np.random.seed(args.seed)
+        train = <fim_suffix>
+        train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(
+            train.data, train.target, test_size=1000, random_state=args.seed)
+
+        model = Pipeline([ ('preproc', PreprocessData()), ( 'model', sklearn.naive_bayes.MultinomialNB())])
+        model.fit(train_data, train_target)
+
+        predictions = model.predict(test_data)
+        print (sklearn.metrics.f1_score(test_target, predictions))
+
+        # Serialize the model.
+        with lzma.open(args.model_path, "wb") as model_file:
+            pickle.dump(model, model_file)
+
+    else:
+        # Use the model and return test set predictions.
+        test = Dataset(args.predict)
+
+        with lzma.open(args.model_path, "rb") as model_file:
+            model = pickle.load(model_file)
+
+        predictions = model.predict(test.data)
+
+        return predictions
+
+
+if __name__ == "__main__":
+    args = parser.parse_args([] if "__file__" not in globals() else None)
+    main(args)<fim_middle>

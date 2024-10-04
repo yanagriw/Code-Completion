@@ -1,0 +1,1 @@
+q.get((l, l), 0) # Adjusts score by subtracting self-pair PMI if present.

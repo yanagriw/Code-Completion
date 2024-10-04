@@ -1,0 +1,1 @@
+ self.CLASSES.index(target))

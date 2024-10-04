@@ -1,0 +1,1 @@
+ model['model'].intercepts_[i] = model['model'].intercepts_[i].astype(np.float16)
