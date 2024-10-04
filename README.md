@@ -31,7 +31,7 @@ Because the chrF score compares text at the character level, it can recognize si
 I developed this script to record the actual missing examples and the generated code in CSV format for more convenient manual comparison.
 
 
-### My Considerations
+# My Considerations
 
 For this assignment, I used five of my own Python scripts, which were divided into 50 examples. I manually selected the splitting position for each example to evaluate the model's performance on both simple template tasks and more complex formulas and algorithms.
 
